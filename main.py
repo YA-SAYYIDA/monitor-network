@@ -22,14 +22,17 @@ def require_key(x_api_key: str = Header(...)):
         raise HTTPException(status_code=401, detail="Invalid API key")
 
 
+# ✅ MAKE-SAFE PAYLOAD (NO 422)
 class HealthPayload(BaseModel):
     device_id: str = Field(..., min_length=1)
-    cpu: float = Field(..., ge=0, le=100)
-    ram: float = Field(..., ge=0, le=100)
+
+    cpu: Optional[float] = Field(default=None, ge=0, le=100)
+    ram: Optional[float] = Field(default=None, ge=0, le=100)
     temperature: Optional[float] = None
-    status: str = "OK"
+
+    status: Optional[str] = "OK"
     health_score: Optional[int] = Field(default=None, ge=0, le=100)
-    extra: Optional[dict] = None
+    extra: Optional[Dict[str, Any]] = None
 
 
 # ✅ REQUIRED FOR MAKE CONNECTION VALIDATION
@@ -40,8 +43,16 @@ def root(_: None = Depends(require_key)):
 
 @app.post("/device/report")
 def report_health(payload: HealthPayload, _: None = Depends(require_key)):
-    data = payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
-    LATEST[payload.device_id] = {"data": data, "ts": time.time()}
+    data = payload.model_dump(exclude_none=True)
+
+    # Optional defaults (safe)
+    data.setdefault("status", "UNKNOWN")
+
+    LATEST[payload.device_id] = {
+        "data": data,
+        "ts": time.time()
+    }
+
     return {"ok": True, "stored_for": payload.device_id}
 
 
